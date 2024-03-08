@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Differential Equation Fitting</title>
+    <!-- 引入Chart.js库的链接 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div>
+        <h2>输入原始数据</h2>
+        <table id="data-table">
+            <tr>
+                <th>时间</th>
+                <th>值</th>
+            </tr>
+        </table>
+        <button onclick="addRow()">添加数据</button>
+        <button onclick="solve()">解微分方程</button>
+    </div>
+    <canvas id="myChart"></canvas>
+    <div id="fitting-results">
+        <h2>拟合度参数</h2>
+        <p id="rmse"></p>
+        <p id="mae"></p>
+        <p id="r2"></p>
+    </div>
+
+    <script>
+        var rawData = [];
+
+        function addRow() {
+            var table = document.getElementById('data-table');
+            var newRow = table.insertRow(-1);
+            var timeCell = newRow.insertCell(0);
+            var valueCell = newRow.insertCell(1);
+            timeCell.innerHTML = '<input type="number" class="time-input">';
+            valueCell.innerHTML = '<input type="number" class="value-input">';
+        }
+
+        function solve() {
+            rawData = [];
+            var timeInputs = document.getElementsByClassName('time-input');
+            var valueInputs = document.getElementsByClassName('value-input');
+            for (var i = 0; i < timeInputs.length; i++) {
+                var time = parseFloat(timeInputs[i].value);
+                var value = parseFloat(valueInputs[i].value);
+                if (!isNaN(time) && !isNaN(value)) {
+                    rawData.push({time: time, value: value});
+                }
+            }
+
+            // 定义微分方程函数
+            function differentialEquation(y) {
+                return y * (1 - y);
+            }
+
+            // 解微分方程的函数
+            function solveDifferentialEquation(y0, t) {
+                var y = [y0];
+                for (var i = 1; i < t.length; i++) {
+                    var h = t[i] - t[i - 1];
+                    y.push(y[i - 1] + differentialEquation(y[i - 1]) * h);
+                }
+                return y;
+            }
+
+            // 解微分方程
+            var initialValues = rawData.map(data => data.value);
+            var timePoints = rawData.map(data => data.time);
+            var solution = solveDifferentialEquation(initialValues[0], timePoints);
+
+            // 绘制结果
+            var ctx = document.getElementById('myChart').getContext('2d');
+            var myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timePoints,
+                    datasets: [{
+                        label: 'Solution',
+                        data: solution,
+                        borderColor: 'blue',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // 计算拟合度参数
+            var rmse = calculateRMSE(rawData, solution);
+            var mae = calculateMAE(rawData, solution);
+            var r2 = calculateR2(rawData, solution);
+
+            // 显示拟合度参数
+            document.getElementById('rmse').textContent = '均方根误差 (RMSE): ' + rmse.toFixed(4);
+            document.getElementById('mae').textContent = '平均绝对误差 (MAE): ' + mae.toFixed(4);
+            document.getElementById('r2').textContent = '决定系数 (R^2): ' + r2.toFixed(4);
+        }
+
+        // 计算均方根误差（RMSE）
+        function calculateRMSE(rawData, solution) {
+            var sumSquaredError = 0;
+            for (var i = 0; i < rawData.length; i++) {
+                var error = rawData[i].value - solution[i];
+                sumSquaredError += error * error;
+            }
+            var meanSquaredError = sumSquaredError / rawData.length;
+            var rmse = Math.sqrt(meanSquaredError);
+            return rmse;
+        }
+
+        // 计算平均绝对误差（MAE）
+        function calculateMAE(rawData, solution) {
+            var sumAbsoluteError = 0;
+            for (var i = 0; i < rawData.length; i++) {
+                var error = Math.abs(rawData[i].value - solution[i]);
+                sumAbsoluteError += error;
+            }
+            var mae = sumAbsoluteError / rawData.length;
+            return mae;
+        }
+
+        // 计算决定系数（R^2）
+        function calculateR2(rawData, solution) {
+            var meanValue = rawData.reduce((acc, data) => acc + data.value, 0) / rawData.length;
+            var totalSumOfSquares = rawData.reduce((acc, data) => acc + Math.pow(data.value - meanValue, 2), 0);
+            var residualSumOfSquares = rawData.reduce((acc, data, i) => acc + Math.pow(data.value - solution[i], 2), 0);
+            var r2 = 1 - (residualSumOfSquares / totalSumOfSquares);
+            return r2;
+        }
+    </script>
+</body>
+</html>
