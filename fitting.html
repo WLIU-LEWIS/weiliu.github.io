@@ -3,20 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Differential Equation Fitting</title>
-    <!-- 引入Chart.js库的链接 -->
+    <title>Differential Equation Solver</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        canvas#myChart {
+            max-width: 50%;
+			max-height: 50%;
+            height: 400x;
+            width: 400px;
+        }
+    </style>
 </head>
 <body>
     <div>
         <h2>输入原始数据</h2>
-        <table id="data-table">
-            <tr>
-                <th>时间</th>
-                <th>值</th>
-            </tr>
-        </table>
-        <button onclick="addRow()">添加数据</button>
+        <textarea id="data-input" rows="10" cols="50" placeholder="在此处粘贴数据"></textarea>
+        <button onclick="parseData()">解析数据</button>
         <button onclick="solve()">解微分方程</button>
     </div>
     <canvas id="myChart"></canvas>
@@ -30,49 +32,49 @@
     <script>
         var rawData = [];
 
-        function addRow() {
-            var table = document.getElementById('data-table');
-            var newRow = table.insertRow(-1);
-            var timeCell = newRow.insertCell(0);
-            var valueCell = newRow.insertCell(1);
-            timeCell.innerHTML = '<input type="number" class="time-input">';
-            valueCell.innerHTML = '<input type="number" class="value-input">';
-        }
-
-        function solve() {
+        function parseData() {
+            var dataInput = document.getElementById('data-input').value;
+            var lines = dataInput.split('\n');
             rawData = [];
-            var timeInputs = document.getElementsByClassName('time-input');
-            var valueInputs = document.getElementsByClassName('value-input');
-            for (var i = 0; i < timeInputs.length; i++) {
-                var time = parseFloat(timeInputs[i].value);
-                var value = parseFloat(valueInputs[i].value);
+            for (var i = 0; i < lines.length; i++) {
+                var parts = lines[i].split(/\s+/);
+                var time = parseFloat(parts[0]);
+                var value = parseFloat(parts[1]);
                 if (!isNaN(time) && !isNaN(value)) {
                     rawData.push({time: time, value: value});
                 }
             }
+            console.log(rawData); // For debugging
+        }
 
-            // 定义微分方程函数
-            function differentialEquation(y) {
-                return y * (1 - y);
+        function solve() {
+            if (rawData.length === 0) {
+                alert('请先解析原始数据！');
+                return;
             }
 
-            // 解微分方程的函数
+            function yourDifferentialEquation(y, t) {
+                var a = 0.1; // 替换为您的参数值
+                var b = 0.2; // 替换为您的参数值
+                return a * y * y + b * t; // 替换为您的微分方程
+            }
+
             function solveDifferentialEquation(y0, t) {
                 var y = [y0];
                 for (var i = 1; i < t.length; i++) {
                     var h = t[i] - t[i - 1];
-                    y.push(y[i - 1] + differentialEquation(y[i - 1]) * h);
+                    y.push(y[i - 1] + yourDifferentialEquation(y[i - 1], t[i - 1]) * h);
                 }
                 return y;
             }
 
-            // 解微分方程
             var initialValues = rawData.map(data => data.value);
             var timePoints = rawData.map(data => data.time);
             var solution = solveDifferentialEquation(initialValues[0], timePoints);
 
-            // 绘制结果
             var ctx = document.getElementById('myChart').getContext('2d');
+            ctx.canvas.width = 400;
+            ctx.canvas.height = 300;
             var myChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -88,7 +90,25 @@
                     scales: {
                         x: {
                             type: 'linear',
-                            position: 'bottom'
+                            position: 'bottom',
+                            ticks: {
+                                stepSize: 1
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: false
                         }
                     }
                 }
@@ -99,13 +119,16 @@
             var mae = calculateMAE(rawData, solution);
             var r2 = calculateR2(rawData, solution);
 
-            // 显示拟合度参数
-            document.getElementById('rmse').textContent = '均方根误差 (RMSE): ' + rmse.toFixed(4);
-            document.getElementById('mae').textContent = '平均绝对误差 (MAE): ' + mae.toFixed(4);
-            document.getElementById('r2').textContent = '决定系数 (R^2): ' + r2.toFixed(4);
+            // 将拟合度参数显示在图表下方
+            var fittingResults = document.getElementById('fitting-results');
+            fittingResults.innerHTML = `
+                <h2>拟合度参数</h2>
+                <p>均方根误差 (RMSE): ${rmse.toFixed(4)}</p>
+                <p>平均绝对误差 (MAE): ${mae.toFixed(4)}</p>
+                <p>决定系数 (R^2): ${r2.toFixed(4)}</p>
+            `;
         }
 
-        // 计算均方根误差（RMSE）
         function calculateRMSE(rawData, solution) {
             var sumSquaredError = 0;
             for (var i = 0; i < rawData.length; i++) {
@@ -117,7 +140,6 @@
             return rmse;
         }
 
-        // 计算平均绝对误差（MAE）
         function calculateMAE(rawData, solution) {
             var sumAbsoluteError = 0;
             for (var i = 0; i < rawData.length; i++) {
@@ -128,7 +150,6 @@
             return mae;
         }
 
-        // 计算决定系数（R^2）
         function calculateR2(rawData, solution) {
             var meanValue = rawData.reduce((acc, data) => acc + data.value, 0) / rawData.length;
             var totalSumOfSquares = rawData.reduce((acc, data) => acc + Math.pow(data.value - meanValue, 2), 0);
