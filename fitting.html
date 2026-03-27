@@ -1,162 +1,161 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Differential Equation Solver</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        canvas#myChart {
-            max-width: 50%;
-			max-height: 50%;
-            height: 400x;
-            width: 400px;
-        }
-    </style>
-</head>
-<body>
-    <div>
-        <h2>输入原始数据</h2>
-        <textarea id="data-input" rows="10" cols="50" placeholder="在此处粘贴数据"></textarea>
-        <button onclick="parseData()">解析数据</button>
-        <button onclick="solve()">解微分方程</button>
-    </div>
-    <canvas id="myChart"></canvas>
-    <div id="fitting-results">
-        <h2>拟合度参数</h2>
-        <p id="rmse"></p>
-        <p id="mae"></p>
-        <p id="r2"></p>
-    </div>
+import streamlit as st
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+from scipy.optimize import least_squares
 
-    <script>
-        var rawData = [];
 
-        function parseData() {
-            var dataInput = document.getElementById('data-input').value;
-            var lines = dataInput.split('\n');
-            rawData = [];
-            for (var i = 0; i < lines.length; i++) {
-                var parts = lines[i].split(/\s+/);
-                var time = parseFloat(parts[0]);
-                var value = parseFloat(parts[1]);
-                if (!isNaN(time) && !isNaN(value)) {
-                    rawData.push({time: time, value: value});
-                }
-            }
-            console.log(rawData); // For debugging
-        }
+# =========================
+# ODE model
+# =========================
+def kinetic_eqs(t, x, k):
+    a = 513.098453785684
+    r = 0.082057338 * 10**15
+    tt = 283.15
+    mne = 0.3 * 10**(-15)
+    mn0 = 0.3 * 10**(-15)
+    v0 = 590.05351792762
+    vb = 385.487547
+    vs0 = 0
+    sigma = 0.6
+    mse = 2 * 10**(-15)
+    vsm = 0.071 * 10**15
 
-        function solve() {
-            if (rawData.length === 0) {
-                alert('请先解析原始数据！');
-                return;
-            }
+    V = x[0]
+    Nsi = x[1]
 
-            function yourDifferentialEquation(y, t) {
-                var a = 0.1; // 替换为您的参数值
-                var b = 0.2; // 替换为您的参数值
-                return a * y * y + b * t; // 替换为您的微分方程
-            }
+    vs = vsm * Nsi
 
-            function solveDifferentialEquation(y0, t) {
-                var y = [y0];
-                for (var i = 1; i < t.length; i++) {
-                    var h = t[i] - t[i - 1];
-                    y.push(y[i - 1] + yourDifferentialEquation(y[i - 1], t[i - 1]) * h);
-                }
-                return y;
-            }
+    denom1 = V - vb - vs
+    denom2 = V - vb - vs - 0.0166 * 10**15 * 0.3 * 10**(-15) * v0
 
-            var initialValues = rawData.map(data => data.value);
-            var timePoints = rawData.map(data => data.time);
-            var solution = solveDifferentialEquation(initialValues[0], timePoints);
+    denom1 = denom1 if abs(denom1) > 1e-12 else 1e-12
+    denom2 = denom2 if abs(denom2) > 1e-12 else 1e-12
 
-            var ctx = document.getElementById('myChart').getContext('2d');
-            ctx.canvas.width = 400;
-            ctx.canvas.height = 300;
-            var myChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: timePoints,
-                    datasets: [{
-                        label: 'Solution',
-                        data: solution,
-                        borderColor: 'blue',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    scales: {
-                        x: {
-                            type: 'linear',
-                            position: 'bottom',
-                            ticks: {
-                                stepSize: 1
-                            }
-                        },
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            ticks: {
-                                stepSize: 1
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        title: {
-                            display: false
-                        }
-                    }
-                }
-            });
+    mni = mn0 * (v0 - vb - vs0) / denom1
 
-            // 计算拟合度参数
-            var rmse = calculateRMSE(rawData, solution);
-            var mae = calculateMAE(rawData, solution);
-            var r2 = calculateR2(rawData, solution);
+    dVdt = (
+        k[0] * a * r * tt *
+        (mni - mne + sigma * (Nsi / denom2 - mse))
+        + vb + vs + 0.0166 * 10**15 * 0.3 * 10**(-15) * v0
+    )
 
-            // 将拟合度参数显示在图表下方
-            var fittingResults = document.getElementById('fitting-results');
-            fittingResults.innerHTML = `
-                <h2>拟合度参数</h2>
-                <p>均方根误差 (RMSE): ${rmse.toFixed(4)}</p>
-                <p>平均绝对误差 (MAE): ${mae.toFixed(4)}</p>
-                <p>决定系数 (R^2): ${r2.toFixed(4)}</p>
-            `;
-        }
+    dNsidt = k[1] * a * (mse - Nsi / denom2)
 
-        function calculateRMSE(rawData, solution) {
-            var sumSquaredError = 0;
-            for (var i = 0; i < rawData.length; i++) {
-                var error = rawData[i].value - solution[i];
-                sumSquaredError += error * error;
-            }
-            var meanSquaredError = sumSquaredError / rawData.length;
-            var rmse = Math.sqrt(meanSquaredError);
-            return rmse;
-        }
+    return [dVdt, dNsidt]
 
-        function calculateMAE(rawData, solution) {
-            var sumAbsoluteError = 0;
-            for (var i = 0; i < rawData.length; i++) {
-                var error = Math.abs(rawData[i].value - solution[i]);
-                sumAbsoluteError += error;
-            }
-            var mae = sumAbsoluteError / rawData.length;
-            return mae;
-        }
 
-        function calculateR2(rawData, solution) {
-            var meanValue = rawData.reduce((acc, data) => acc + data.value, 0) / rawData.length;
-            var totalSumOfSquares = rawData.reduce((acc, data) => acc + Math.pow(data.value - meanValue, 2), 0);
-            var residualSumOfSquares = rawData.reduce((acc, data, i) => acc + Math.pow(data.value - solution[i], 2), 0);
-            var r2 = 1 - (residualSumOfSquares / totalSumOfSquares);
-            return r2;
-        }
-    </script>
-</body>
-</html>
+# =========================
+# Simulation
+# =========================
+def simulate(k, t_eval, x0):
+    sol = solve_ivp(
+        lambda t, x: kinetic_eqs(t, x, k),
+        (t_eval[0], t_eval[-1]),
+        x0,
+        t_eval=t_eval,
+        method='RK45',
+        rtol=1e-8,
+        atol=1e-10
+    )
+    return sol.y.T
+
+
+# =========================
+# Objective function
+# =========================
+def objective(k, t, y, x0):
+    try:
+        X = simulate(k, t, x0)
+        if np.any(np.isnan(X)):
+            return np.ones_like(y) * 1e6
+        return X[:, 0] - y
+    except:
+        return np.ones_like(y) * 1e6
+
+
+# =========================
+# Streamlit UI
+# =========================
+st.title("Cell Volume Model Fitting Tool")
+
+st.sidebar.header("Input parameters")
+
+Lp0 = st.sidebar.number_input("Initial Lp", value=0.5)
+Ps0 = st.sidebar.number_input("Initial Ps", value=5.0)
+
+Lp_lb = st.sidebar.number_input("Lp lower bound", value=0.001)
+Ps_lb = st.sidebar.number_input("Ps lower bound", value=0.1)
+
+Lp_ub = st.sidebar.number_input("Lp upper bound", value=1.0)
+Ps_ub = st.sidebar.number_input("Ps upper bound", value=20.0)
+
+V0 = st.sidebar.number_input("Initial V", value=590.0535179)
+Nsi0 = st.sidebar.number_input("Initial Nsi", value=0.0)
+
+
+# =========================
+# Upload data
+# =========================
+uploaded_file = st.file_uploader("Upload CSV (columns: time, V)")
+
+if uploaded_file:
+    data = pd.read_csv(uploaded_file)
+    t = data.iloc[:, 0].values
+    y = data.iloc[:, 1].values
+
+    st.write("Preview data:")
+    st.write(data.head())
+
+    if st.button("Run Fitting"):
+
+        k0 = np.array([Lp0, Ps0])
+        lb = np.array([Lp_lb, Ps_lb])
+        ub = np.array([Lp_ub, Ps_ub])
+        x0 = np.array([V0, Nsi0])
+
+        result = least_squares(
+            objective,
+            k0,
+            bounds=(lb, ub),
+            args=(t, y, x0),
+            max_nfev=5000
+        )
+
+        k = result.x
+        X = simulate(k, t, x0)
+        y_fit = X[:, 0]
+
+        # stats
+        R = np.corrcoef(y, y_fit)[0, 1]
+        R2 = 1 - np.sum((y - y_fit)**2) / np.sum((y - np.mean(y))**2)
+        RMSE = np.sqrt(np.mean((y - y_fit)**2))
+        SSE = np.sum((y - y_fit)**2)
+
+        st.success("Fitting completed!")
+
+        st.write("### Parameters")
+        st.write({"Lp": k[0], "Ps": k[1]})
+
+        st.write("### Statistics")
+        st.write({"R": R, "R²": R2, "RMSE": RMSE, "SSE": SSE})
+
+        # plot
+        t_smooth = np.linspace(t.min(), t.max(), 200)
+        y_smooth = simulate(k, t_smooth, x0)[:, 0]
+
+        fig, ax = plt.subplots()
+        ax.plot(t_smooth, y_smooth)
+        ax.scatter(t, y)
+        ax.set_xlabel("Time")
+        ax.set_ylabel("V")
+        ax.set_title("Fitting result")
+        st.pyplot(fig)
+
+        # residual
+        fig2, ax2 = plt.subplots()
+        ax2.plot(t, y - y_fit, 'o-')
+        ax2.axhline(0)
+        ax2.set_title("Residual")
+        st.pyplot(fig2)
