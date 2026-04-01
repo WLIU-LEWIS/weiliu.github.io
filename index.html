@@ -2,52 +2,41 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
 
 <head>
-
   <title>Wei Liu's Homepage</title>
 
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-  <meta name="description" content="Yunhe Wang is currently a senior researcher at Huawei Noah's Ark Lab">
-  <meta name="keywords" content="Yunhe Wang, 王云鹤, wangyunhe, Yunhe, Wang, Deep Learning, Huawei, PKU, Computer, Vision">
-  <meta name="author" content="Yunhe Wang" />
+  <meta name="description" content="Wei Liu is a researcher in cryobiology, cell cryopreservation, vitrification, and biobanking.">
+  <meta name="keywords" content="Wei Liu, cryobiology, cryopreservation, vitrification, biobanking, stem cells, T cells">
+  <meta name="author" content="Wei Liu" />
 
   <link rel="stylesheet" href="w3.css">
 
   <style>
-  .w3-sidebar a {font-family: "Roboto", sans-serif}
-  body,h1,h2,h3,h4,h5,h6,.w3-wide {font-family: "Montserrat", sans-serif;}
+    .w3-sidebar a {font-family: "Roboto", sans-serif}
+    body,h1,h2,h3,h4,h5,h6,.w3-wide {font-family: "Montserrat", sans-serif;}
+    body {color: #222;}
+    a {color: #3b6ea8;}
+    .section-text {line-height: 1.8;}
+    .profile-text {
+      width: 100%;
+      border: 0;
+      border-spacing: 0;
+      border-collapse: separate;
+      margin-right: auto;
+      margin-left: auto;
+      max-width: 650px;
+      line-height: 1.8;
+    }
+    .footer-note {
+      font-size: 16px;
+      line-height: 1.8;
+    }
   </style>
 
   <link rel="icon" type="image/png" href="images/icons.png">
-  <!--
-  <script src="jquery.min.js"></script>
-  <script>
-  $(document).ready(function(){
-    // Add smooth scrolling to all links
-    $("a").on('click', function(event) {
-      // Make sure this.hash has a value before overriding default behavior
-      if (this.hash !== "") {
-        // Prevent default anchor click behavior
-        event.preventDefault();
-        // Store hash
-        var hash = this.hash;
-        // Using jQuery's animate() method to add smooth page scroll
-        // The optional number (800) specifies the number of milliseconds it takes to scroll to the specified area
-        $('html, body').animate({
-          scrollTop: $(hash).offset().top
-        }, 800, function(){
-          // Add hash (#) to URL when done scrolling (default click behavior)
-          window.location.hash = hash;
-        });
-      } // End if
-    });
-  });
-  </script>
-  //-->
-
 </head>
-
 
 <body class="w3-content" style="max-width:1000px">
 
@@ -63,212 +52,184 @@
     <a href="#publications" class="w3-bar-item w3-button">Research</a>
     <a href="#education" class="w3-bar-item w3-button">Education</a>
     <a href="#award" class="w3-bar-item w3-button">Awards</a>
-    <a href="#Code" class="w3-bar-item w3-button">Code</a>
+    <a href="#code" class="w3-bar-item w3-button">Code</a>
   </div>
 </nav>
 
 <!-- Top menu on small screens -->
 <header class="w3-bar w3-top w3-hide-large w3-black w3-xlarge">
   <div class="w3-bar-item w3-padding-24">WEI</div>
-  <a href="javascript:void(0)" class="w3-bar-item w3-button w3-padding-24 w3-right"  style="font-stretch: extra-expanded;" onclick="w3_open()"><b>≡</b></a>
-  </div>
+  <a href="javascript:void(0)" class="w3-bar-item w3-button w3-padding-24 w3-right" style="font-stretch: extra-expanded;" onclick="w3_open()"><b>≡</b></a>
 </header>
 
 <!-- Overlay effect when opening sidebar on small screens -->
 <div class="w3-overlay w3-hide-large" onclick="w3_close()" style="cursor:pointer" title="close side menu" id="myOverlay"></div>
 
-<!-- !PAGE CONTENT! -->
+<!-- Page Content -->
 <div class="w3-main" style="margin-left:150px">
 
-  <!-- Push down content on small screens -->
   <div class="w3-hide-large" style="margin-top:83px"></div>
 
-<!-- The Home Section --> 
-    <div class="w3-container w3-center w3-padding-32" id="home">
-      <img style="width: 80%;max-width: 320px" alt="profile photo" src="images/onepiece.jpg">
-      <h1>Wei Liu</h1>
-        <p class="w3-justify" style="width:100%;border:0px;border-spacing:0px;border-collapse:separate;margin-right:auto;margin-left:auto;max-width:600px">
-          This is a test text. I am a researcher interested in cell cryopreservation and biobanking, Shanghai, where I work on cryopreservation and cryoinjuries of human T cells and stem cells.
-        </p>
-        <p class="w3-center">
-          <a href="mailto:weiliu1009@gmail.com">Email</a> &nbsp/&nbsp
-          <a href="https://scholar.google.com.hk/citations?user=pZt4pq8AAAAJ">Google Scholar</a> &nbsp/&nbsp
-        </p>
-        </tbody></table>
-  </div>
+  <!-- Home -->
+  <div class="w3-container w3-center w3-padding-32" id="home">
+    <img style="width:80%; max-width:320px" alt="profile photo" src="images/onepiece.jpg">
+    <h1>Wei Liu</h1>
 
-<!-- The Projects Section -->
-  <div class="w3-container w3-padding-32" id="projects"> 
-    <h2>Recent Projects</h2>
-    <p class="w3-justify">
-       leave this blank for now</a>).
+    <p class="profile-text w3-justify">
+      I am a researcher in cryobiology and bioengineering, with interests in cell cryopreservation, vitrification, biobanking, and low-temperature injury mechanisms. My work focuses on developing safer and more effective cryopreservation strategies for clinically relevant cells and tissues, including human T lymphocytes, mesenchymal stem cells, and related biomedical samples.
     </p>
 
-        <h4><li>Cryoinjuries of cells during freezing</li></h4>
-        <img style="width:45%;" src="images/coolingat5.gif"> &nbsp&nbsp <img style="width:45%;" src="images/coolingat20.gif">
-        <p class="w3-justify">
-        Reaction of Human T Cells under different cooling rates </a>
-        </p>
-        <p class="w3-justify">
-        leave this blank for now</a>).
-        </p> 
-
-        <h4><li>Dynamic Simulation of Ice Crystal Growth</li></h4>
-        <img style="width:60%;" src="images/icegrowth.gif">
-        <p class="w3-justify">
-       Growth process of a sigle ice crystals.
-        </p>
-        <p class="w3-justify">
-        leave this blank for now</a>).
-        </p>  
-
+    <p class="w3-center">
+      <a href="mailto:weiliu1009@gmail.com">Email</a> &nbsp;/&nbsp;
+      <a href="https://scholar.google.com.hk/citations?user=pZt4pq8AAAAJ" target="_blank">Google Scholar</a>
+    </p>
   </div>
-  
-  <!-- The Talks Section -->
+
+  <!-- Projects -->
+  <div class="w3-container w3-padding-32" id="projects">
+    <h2>Recent Projects</h2>
+
+    <h4><li>Cryoinjuries of Cells During Freezing</li></h4>
+    <img style="width:45%;" src="images/coolingat5.gif"> &nbsp;&nbsp;
+    <img style="width:45%;" src="images/coolingat20.gif">
+    <p class="section-text w3-justify">
+      Simulation and visualization of the response of human T cells under different cooling rates.
+    </p>
+
+    <h4><li>Dynamic Simulation of Ice Crystal Growth</li></h4>
+    <img style="width:60%;" src="images/icegrowth.gif">
+    <p class="section-text w3-justify">
+      Visualization of the growth process of a single ice crystal under low-temperature conditions.
+    </p>
+  </div>
+
+  <!-- Talks -->
   <div class="w3-container w3-light-grey w3-padding-32" id="talks">
     <h2>Talks</h2>
-      <p><li> 08/2018, Preliminary study on controlled ice nucleation of human T lymphocytes cryopreservation, The 14th National Refrigerator (Cabinet), Air Conditioner and Compressor Academic Annual Conference & the 11th National  Cryo-Biomedical and Instrument Academic Annual Conference, Qingdao, China</a>.</li></p>	  
-      <p><li> 05/2019, Application of Apoptotic Inhibitors on the Cryopreservation of Cultured Human T Cells, ISBER 2019 Annual Meeting & Exhibits, Shanghai, China</a>.</li></p>
-      <p><li> 09/2019, Impacts of Trehalose and L-proline on the Thermodynamic Nonequilibrium Phase change and Thermal Properties of Normal Saline, 2019 International Symposium on Cryobiology and Living Biobanking & Forum on Innovation for College Students, Changsha, China</a>.</li></p>
-      <p><li> 12/2020, Challenges and strategies in the cryopreservation of cells. The 3rd China Drug Safety Technology Conference & the 4th Biosafety Forum. Beijing, China</a>.</li></p>
-     
+    <p><li>08/2018, Preliminary study on controlled ice nucleation of human T lymphocytes cryopreservation, The 14th National Refrigerator (Cabinet), Air Conditioner and Compressor Academic Annual Conference & the 11th National Cryo-Biomedical and Instrument Academic Annual Conference, Qingdao, China.</li></p>
+    <p><li>05/2019, Application of Apoptotic Inhibitors on the Cryopreservation of Cultured Human T Cells, ISBER 2019 Annual Meeting & Exhibits, Shanghai, China.</li></p>
+    <p><li>09/2019, Impacts of Trehalose and L-proline on the Thermodynamic Nonequilibrium Phase Change and Thermal Properties of Normal Saline, 2019 International Symposium on Cryobiology and Living Biobanking & Forum on Innovation for College Students, Changsha, China.</li></p>
+    <p><li>12/2020, Challenges and strategies in the cryopreservation of cells, The 3rd China Drug Safety Technology Conference & the 4th Biosafety Forum, Beijing, China.</li></p>
   </div>
 
- <!-- The Publications Section -->
-  <div class="w3-container w3-padding-32"" id="publications">
+  <!-- Research -->
+  <div class="w3-container w3-padding-32" id="publications">
     <h2>Research</h2>
-      <p class="w3-left-align" style="line-height:200%">
-        I'm interested in devleoping freezing protocols for different types of bio-samples (e.g. huamn T lymphocytes, Umbilical cord Mesenchymal Stem Cells, Umbilical cord tissues).
-      </p>
-    <h4> Research Papers:</h4>
+    <p class="w3-left-align section-text">
+      I am interested in developing freezing protocols for different types of biosamples, including human T lymphocytes, umbilical cord mesenchymal stem cells, and umbilical cord tissues.
+    </p>
 
+    <h4>Research Papers</h4>
     <ol>
 
       <p>
-      <li><strong>Review of the Mechanism of Intracellular Ice Formation</strong>
-      <br>
-      <strong>Wei Liu</strong>, Mingwei Guo, Zhiyu Guo, Baolin Liu
-      <br>
-      <em>Journal of Refrigeration (in Chinese)</em> 2018/06/1 | <a style="color: #447ec9" href="https://www.cnki.com.cn/Article/CJFDTOTAL-ZLXB201803019.htm">paper</a> 
-      </p>
-																	       
-      <p>
-      <li><strong>Impacts of trehalose and l-proline on the thermodynamic nonequilibrium phase change and thermal properties of normal saline</strong>
-      <br>
-      <strong>Wei Liu</strong>, Zhiyong Huang, Xiaowen He, Pei Jiang, Xiaoyue Huo, Zekang Lu, Baolin Liu
-      <br>
-      <em>Cryobiology</em> 2020/10/1 | <a style="color: #447ec9" href="https://www.sciencedirect.com/science/article/abs/pii/S0011224020302467">paper</a> 
+        <li><strong>Review of the Mechanism of Intracellular Ice Formation</strong><br>
+        <strong>Wei Liu</strong>, Mingwei Guo, Zhiyu Guo, Baolin Liu<br>
+        <em>Journal of Refrigeration (in Chinese)</em> 2018/06/1 |
+        <a style="color:#447ec9" href="https://www.cnki.com.cn/Article/CJFDTOTAL-ZLXB201803019.htm" target="_blank">paper</a>
       </p>
 
       <p>
-      <li><strong> Investigating solution effects injury of human T lymphocytes and its prevention during interrupted slow cooling</strong>
-      <br>
-      <strong>Wei Liu</strong>, Zhiyong Huang, Baolin Liu, Xiaowen He, Suxia Xue, Xiaojuan Yan, Ganesh K Jaganathan
-      <br>
-      <em>Cryobiology</em> 2021/4/1 | <a style="color: #447ec9" href="https://linkinghub.elsevier.com/retrieve/pii/S0011224021000183">paper</a> 
-      </p>																	       
+        <li><strong>Impacts of trehalose and l-proline on the thermodynamic nonequilibrium phase change and thermal properties of normal saline</strong><br>
+        <strong>Wei Liu</strong>, Zhiyong Huang, Xiaowen He, Pei Jiang, Xiaoyue Huo, Zekang Lu, Baolin Liu<br>
+        <em>Cryobiology</em> 2020/10/1 |
+        <a style="color:#447ec9" href="https://www.sciencedirect.com/science/article/abs/pii/S0011224020302467" target="_blank">paper</a>
+      </p>
 
       <p>
-      <li><strong>Optimization of UC-MSCs cold-chain storage by minimizing temperature fluctuations using an automatic cryopreservation system</strong>
-      <br>
-      Yanhong Xu, Leo Li-Ying Chan, Siye Chen, Bi Ying, Ting Zhang,   <strong>Wei Liu  </strong>, Hao Guo, Jianxin Wang, Zhifeng Xu, Xuebing Zhang, Xiaowen He
-      <br>
-      <em>Cryobiology</em> 2021/4/1 | <a style="color: #447ec9" href="https://www.sciencedirect.com/science/article/abs/pii/S0011224020306544">paper</a> 
-      </p>																	      
-																	      
-      <p>																   
-      <li><strong>Cryopreservation of human T lymphocytes under fast cooling with controlled ice nucleation in cryoprotective solutions of low toxicity</strong>
-      <br>
-      Zhiyong Huang, <strong>Wei Liu</strong>, Baolin Liu, Xiaowen He, Hao Guo, Suxia Xue, Xiaojuan Yan, Ganesh K Jaganatha
-      <br>
-      <em>Cryobiology</em> 2021/12/1 | <a style="color: #447ec9" href="https://www.sciencedirect.com/science/article/abs/pii/S0011224021001486">paper</a> 
+        <li><strong>Investigating solution effects injury of human T lymphocytes and its prevention during interrupted slow cooling</strong><br>
+        <strong>Wei Liu</strong>, Zhiyong Huang, Baolin Liu, Xiaowen He, Suxia Xue, Xiaojuan Yan, Ganesh K Jaganathan<br>
+        <em>Cryobiology</em> 2021/4/1 |
+        <a style="color:#447ec9" href="https://linkinghub.elsevier.com/retrieve/pii/S0011224021000183" target="_blank">paper</a>
       </p>
-																	       
-      <p>																   
-      <li><strong>Slow Cooling and Controlled Ice Nucleation Enabling the Cryopreservation of Human T Lymphocytes with Low-Concentration Extracellular Trehalose</strong>
-      <br>
-      Zhiyong Huang, <strong>Wei Liu</strong>, Tianhua Ma, Honglian Zhao, Xiaowen He, Baolin Liu
-      <br>
-      <em>Biopreservation and Biobanking</em> 2022/8/1 | <a style="color: #447ec9" href="https://www.liebertpub.com/doi/10.1089/bio.2022.0028?url_ver=Z39.88-2003&rfr_id=ori%3Arid%3Acrossref.org&rfr_dat=cr_pub++0pubmed">paper</a> 
-      </p>																	      
-																	      
 
-      </ol>
+      <p>
+        <li><strong>Optimization of UC-MSCs cold-chain storage by minimizing temperature fluctuations using an automatic cryopreservation system</strong><br>
+        Yanhong Xu, Leo Li-Ying Chan, Siye Chen, Bi Ying, Ting Zhang, <strong>Wei Liu</strong>, Hao Guo, Jianxin Wang, Zhifeng Xu, Xuebing Zhang, Xiaowen He<br>
+        <em>Cryobiology</em> 2021/4/1 |
+        <a style="color:#447ec9" href="https://www.sciencedirect.com/science/article/abs/pii/S0011224020306544" target="_blank">paper</a>
+      </p>
 
-    </p>
+      <p>
+        <li><strong>Cryopreservation of human T lymphocytes under fast cooling with controlled ice nucleation in cryoprotective solutions of low toxicity</strong><br>
+        Zhiyong Huang, <strong>Wei Liu</strong>, Baolin Liu, Xiaowen He, Hao Guo, Suxia Xue, Xiaojuan Yan, Ganesh K Jaganatha<br>
+        <em>Cryobiology</em> 2021/12/1 |
+        <a style="color:#447ec9" href="https://www.sciencedirect.com/science/article/abs/pii/S0011224021001486" target="_blank">paper</a>
+      </p>
+
+      <p>
+        <li><strong>Slow Cooling and Controlled Ice Nucleation Enabling the Cryopreservation of Human T Lymphocytes with Low-Concentration Extracellular Trehalose</strong><br>
+        Zhiyong Huang, <strong>Wei Liu</strong>, Tianhua Ma, Honglian Zhao, Xiaowen He, Baolin Liu<br>
+        <em>Biopreservation and Biobanking</em> 2022/8/1 |
+        <a style="color:#447ec9" href="https://www.liebertpub.com/doi/10.1089/bio.2022.0028?url_ver=Z39.88-2003&rfr_id=ori%3Arid%3Acrossref.org&rfr_dat=cr_pub++0pubmed" target="_blank">paper</a>
+      </p>
+
+    </ol>
   </div>
 
-<!-- The Education Section -->
+  <!-- Education -->
   <div class="w3-container w3-light-grey w3-padding-32" id="education">
     <h2>Education</h2>
-      <p><li> 2011.09 - 2015.07: Bachelor of Biological Science, China Agricultural University</a>.</p>
-      <p><li> 2016.09 - 2022.06: Doctor of Biomedical Engineering, University of Shanghai for Science and Technology</a>.</p>							     
+    <p><li>2011.09 - 2015.07: Bachelor of Biological Science, China Agricultural University.</li></p>
+    <p><li>2016.09 - 2022.06: Doctor of Biomedical Engineering, University of Shanghai for Science and Technology.</li></p>
   </div>
 
-  <!-- The Awards Section -->
+  <!-- Awards -->
   <div class="w3-container w3-padding-32" id="award">
     <h2>Awards</h2>
-    <p><li> 2017, National Bonze Winner, The third China college students "internet +" innovation and entrepreneurship competition</a></p>               
-    <p><li> 2019, Outstanding Prize of Presentation, 2019 International Symposium on Cryobiology and Living Biobanking & Forum on Innovation for College Students </a></p>
-  </div>  
+    <p><li>2017, National Bronze Winner, The Third China College Students "Internet +" Innovation and Entrepreneurship Competition.</li></p>
+    <p><li>2019, Outstanding Prize of Presentation, 2019 International Symposium on Cryobiology and Living Biobanking & Forum on Innovation for College Students.</li></p>
+  </div>
 
-  <!-- The Code Section -->
+  <!-- Code -->
   <div class="w3-container w3-padding-32" id="code">
-    <h2>低温生物工具</h2>
-    <p><li>  <a href="https://online-easy-sim-2ivgs4czdjqdwydax3edry.streamlit.app/"> 点击这里测量渗透能力</a></p>               	
-   <p><li> <a href="https://online-easy-sim-mf2wtcvkr6zfendnd5r9hd.streamlit.app/">Find the best cooling rate for your cell!</a></p>             
-  </div>
-							 
-  <div class="w3-light-grey w3-center w3-padding-24">
-
-    Welcome to use this website's <a href="https://github.com/YunheWang/HomePage">source code</a>, just add a link back to here. <a href="https://www.wangyunhe.site/">&#10025;</a></br>
-
-  <!-- Default Statcounter code for Yunhe Wang's Homepage
-  https://www.wangyunhe.site -->
-  No.
-  <script type="text/javascript">
-  var sc_project=12347113; 
-  var sc_invisible=0; 
-  var sc_security="21aca5d1"; 
-  var sc_https=1; 
-  var scJsHost = "https://";
-  document.write("<sc"+"ript type='text/javascript' src='" + scJsHost+
-  "statcounter.com/counter/counter.js'></"+"script>");
-  </script> Visitor Since Feb 2022. Powered by <a href="https://www.w3schools.com/w3css/default.asp" title="W3.CSS" target="_blank" class="w3-hover-opacity">w3.css</a>
-  <noscript>
-    <div class="statcounter"><a title="Web Analytics Made Easy -
-  StatCounter" href="https://statcounter.com/" target="_blank"><img
-  class="statcounter" src="https://c.statcounter.com/12347113/0/21aca5d1/0/"
-  alt="Web Analytics Made Easy - StatCounter"></a></div>
-  </noscript>
-  <!-- End of Statcounter Code -->
-
+    <h2>Low-Temperature Biology Tools</h2>
+    <p><li><a href="https://online-easy-sim-2ivgs4czdjqdwydax3edry.streamlit.app/" target="_blank">Measure osmotic permeability</a></li></p>
+    <p><li><a href="https://online-easy-sim-mf2wtcvkr6zfendnd5r9hd.streamlit.app/" target="_blank">Find the best cooling rate for your cell</a></li></p>
   </div>
 
-  <!-- End page content -->
+  <!-- Footer -->
+  <div class="w3-light-grey w3-center w3-padding-24 footer-note">
+
+    Welcome to use this website's
+    <a href="https://github.com/YunheWang/HomePage" target="_blank">source code</a>,
+    just add a link back to
+    <a href="https://www.wangyunhe.site/" target="_blank">&#10025;</a>.
+    <br><br>
+
+    No.
+    <script type="text/javascript">
+      var sc_project=13213982;
+      var sc_invisible=0;
+      var sc_security="8cf0c00a";
+      var scJsHost = "https://";
+      document.write("<sc"+"ript type='text/javascript' src='" + scJsHost +
+      "statcounter.com/counter/counter.js'></"+"script>");
+    </script>
+    Visitor Since Aug 2025. Powered by
+    <a href="https://www.w3schools.com/w3css/default.asp" title="W3.CSS" target="_blank" class="w3-hover-opacity">w3.css</a>
+
+    <noscript>
+      <div class="statcounter">
+        <a title="Web Analytics" href="https://statcounter.com/" target="_blank">
+          <img class="statcounter"
+               src="https://c.statcounter.com/13213982/0/8cf0c00a/0/"
+               alt="Web Analytics"
+               referrerPolicy="no-referrer-when-downgrade">
+        </a>
+      </div>
+    </noscript>
+
+  </div>
+
 </div>
 
 <script>
-// Accordion 
-function myAccFunc() {
-  var x = document.getElementById("demoAcc");
-  if (x.className.indexOf("w3-show") == -1) {
-    x.className += " w3-show";
-  } else {
-    x.className = x.className.replace(" w3-show", "");
-  }
-}
-
-// Click on the "Jeans" link on page load to open the accordion for demo purposes
-document.getElementById("myBtn").click();
-
-
-// Open and close sidebar
 function w3_open() {
   document.getElementById("mySidebar").style.display = "block";
   document.getElementById("myOverlay").style.display = "block";
 }
- 
+
 function w3_close() {
   document.getElementById("mySidebar").style.display = "none";
   document.getElementById("myOverlay").style.display = "none";
