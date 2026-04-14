@@ -1,0 +1,4 @@
+tesseract-ocr
+tesseract-ocr-eng
+ffmpeg
+libglib2.0-0
