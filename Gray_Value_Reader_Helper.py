@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -42,12 +43,6 @@ def patch_drawable_canvas_streamlit_image_api() -> bool:
 
 
 CAN_USE_DRAWABLE_CANVAS = HAS_DRAWABLE_CANVAS and patch_drawable_canvas_streamlit_image_api()
-
-
-st.set_page_config(
-    page_title="Gray Value Reader Helper",
-    layout="wide",
-)
 
 
 @dataclass
@@ -323,6 +318,46 @@ def create_auto_edge_pattern_mask(
     return kept > 0
 
 
+def remove_small_mask_components(mask: np.ndarray, min_area: int) -> np.ndarray:
+    """Remove tiny connected components from a binary mask."""
+    if min_area <= 1 or not np.any(mask):
+        return mask
+
+    mask_uint8 = mask.astype(np.uint8) * 255
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask_uint8, connectivity=8)
+    kept = np.zeros_like(mask, dtype=bool)
+    for label in range(1, num_labels):
+        if int(stats[label, cv2.CC_STAT_AREA]) >= min_area:
+            kept[labels == label] = True
+    return kept
+
+
+def edge_contour_length(mask: np.ndarray) -> float:
+    """Measure edge masks by contour length, which is stable against line thickness."""
+    if not np.any(mask):
+        return 0.0
+    mask_uint8 = mask.astype(np.uint8) * 255
+    contours, _ = cv2.findContours(mask_uint8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    return float(sum(cv2.arcLength(contour, True) for contour in contours))
+
+
+def effective_pattern_area(mask: np.ndarray, optical_roi_mode: str) -> float:
+    """
+    Return a stable area-like signal for the selected mask.
+
+    Edge masks are measured as contour length so small changes in detected edge
+    thickness or scattered noise do not become large curve changes.
+    """
+    if mask is None or not np.any(mask):
+        return 0.0
+
+    cleaned = remove_small_mask_components(mask, min_area=8)
+    if optical_roi_mode == "Auto dark-edge ROI":
+        return edge_contour_length(cleaned)
+
+    return float(cleaned.sum())
+
+
 def canvas_roi_selector(
     frame_bgr: np.ndarray,
     image_w: int,
@@ -444,14 +479,29 @@ def simplified_canvas_roi_selector(
         horizontal=True,
         key="simple_canvas_target_roi",
     )
+    if target == "Temperature OCR ROI":
+        st.info("Box the full temperature label, including `Temp`, the number, and `°C`; avoid nearby unrelated text.")
     if st.session_state.get("simple_canvas_last_target") != target:
         st.session_state.simple_canvas_last_target = target
         st.session_state.simple_canvas_clear_counter = st.session_state.get("simple_canvas_clear_counter", 0) + 1
+        st.rerun()
 
     canvas_w, canvas_h, scale = get_canvas_size(image_w, image_h, max_width=max_preview_width)
-    frame_rgb = display_image_rgb if display_image_rgb is not None else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    canvas_image = Image.fromarray(frame_rgb).resize((canvas_w, canvas_h), resample=Image.Resampling.LANCZOS)
+    frame_rgb = display_image_rgb.copy() if display_image_rgb is not None else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    if frame_rgb.dtype != np.uint8:
+        frame_rgb = np.clip(frame_rgb, 0, 255).astype(np.uint8)
+    canvas_image = Image.fromarray(np.ascontiguousarray(frame_rgb), mode="RGB").resize(
+        (canvas_w, canvas_h),
+        resample=Image.Resampling.LANCZOS,
+    )
     stroke_color = "#ffd000" if target == "Pattern search ROI" else "#ff5000"
+    canvas_refresh_col, canvas_help_col = st.columns([0.34, 0.66])
+    with canvas_refresh_col:
+        if st.button("Refresh preview canvas", use_container_width=True, key="simple_refresh_canvas"):
+            st.session_state.simple_canvas_clear_counter = st.session_state.get("simple_canvas_clear_counter", 0) + 1
+            st.rerun()
+    with canvas_help_col:
+        st.caption("Use refresh if the drawing area appears blank.")
     canvas_key = (
         f"simple_roi_canvas_{target}_"
         f"{st.session_state.get('preview_frame_index', 0)}_"
@@ -645,7 +695,7 @@ def calculate_optical_signal(
                 "pattern_area_fraction": np.nan,
             }
         sample_mask = auto_pattern_mask
-        pattern_area_px = int(sample_mask.sum())
+        pattern_area_px = effective_pattern_area(sample_mask, optical_roi_mode)
         if pattern_area_px == 0:
             return {
                 "gray_value": np.nan,
@@ -673,7 +723,7 @@ def calculate_optical_signal(
             "darkness_value": 255.0 - sample_gray,
             "dissolution_signal": corrected_darkness,
             "background_corrected_darkness": corrected_darkness,
-            "pattern_area_px": float(pattern_area_px),
+            "pattern_area_px": pattern_area_px,
             "pattern_area_fraction": float(pattern_area_px / image_area) if image_area else np.nan,
         }
 
@@ -1473,6 +1523,91 @@ def smooth_series(series: pd.Series, window: int) -> pd.Series:
     return series.rolling(window=window, center=True, min_periods=1).mean()
 
 
+def robust_mad(values: pd.Series) -> float:
+    """Return a robust median absolute deviation estimate."""
+    valid = pd.to_numeric(values, errors="coerce").dropna()
+    if valid.empty:
+        return 0.0
+    median = float(valid.median())
+    return float(np.median(np.abs(valid.to_numpy(dtype=float) - median)))
+
+
+def signal_time_order_column(results: pd.DataFrame) -> Optional[str]:
+    """Choose the most reliable time-order column available in the result table."""
+    for column in ("time_s", "frame", "image_index"):
+        if column in results.columns:
+            return column
+    return None
+
+
+def stabilize_pre_lcst_signal(results: pd.DataFrame, y_column: str, smoothing_window: int) -> pd.Series:
+    """
+    Flatten the initial pre-LCST plateau until the signal makes a sustained move.
+
+    The raw measurements are left intact. This correction is only for plotting and
+    LCST estimation, where small illumination/segmentation drift before the real
+    transition would otherwise be exaggerated by normalization.
+    """
+    if y_column not in results.columns or results.empty:
+        return pd.Series(dtype=float, index=results.index)
+
+    order_column = signal_time_order_column(results)
+    ordered = results.copy()
+    ordered["_original_index"] = ordered.index
+    if order_column is not None:
+        ordered = ordered.sort_values(order_column)
+
+    signal = pd.to_numeric(ordered[y_column], errors="coerce")
+    valid_mask = signal.notna()
+    valid_count = int(valid_mask.sum())
+    stabilized = signal.copy()
+    if valid_count < 6:
+        return stabilized.reindex(results.index)
+
+    valid_positions = np.flatnonzero(valid_mask.to_numpy())
+    baseline_count = max(3, min(valid_count, int(np.ceil(valid_count * 0.20))))
+    initial_positions = valid_positions[:baseline_count]
+    final_positions = valid_positions[-baseline_count:]
+    initial_values = signal.iloc[initial_positions]
+    final_values = signal.iloc[final_positions]
+
+    initial_level = float(initial_values.median())
+    final_level = float(final_values.median())
+    total_change = final_level - initial_level
+    finite_signal = signal.dropna()
+    observed_span = float(finite_signal.quantile(0.90) - finite_signal.quantile(0.10))
+    if abs(total_change) < max(1e-9, 0.05 * max(observed_span, 1e-9)):
+        return stabilized.reindex(results.index)
+
+    noise = robust_mad(initial_values)
+    threshold = max(3.0 * noise, 0.12 * abs(total_change), 0.03 * max(observed_span, abs(total_change)), 1e-9)
+
+    detection_window = max(3, min(11, int(smoothing_window) if int(smoothing_window) > 1 else 3))
+    if detection_window % 2 == 0:
+        detection_window += 1
+    smoothed = signal.rolling(window=detection_window, center=True, min_periods=1).median().ffill().bfill()
+
+    direction = 1.0 if total_change > 0 else -1.0
+    signed_deviation = (smoothed - initial_level) * direction
+    departure = signed_deviation > threshold
+
+    onset_position = None
+    departure_array = departure.to_numpy(dtype=bool)
+    for pos in valid_positions[baseline_count:]:
+        local = departure_array[pos : min(len(departure_array), pos + 3)]
+        if int(np.count_nonzero(local)) >= min(2, len(local)):
+            onset_position = int(pos)
+            break
+
+    if onset_position is None or onset_position <= 0:
+        return stabilized.reindex(results.index)
+
+    pre_positions = valid_positions[valid_positions < onset_position]
+    stabilized.iloc[pre_positions] = initial_level
+    stabilized.index = ordered["_original_index"]
+    return stabilized.reindex(results.index)
+
+
 def normalize_series(series: pd.Series) -> pd.Series:
     """Min-max normalize a signal to 0-1."""
     valid = series.dropna()
@@ -1535,7 +1670,10 @@ def estimate_lcst_inflection(
     aggregation: str = "Mean",
 ) -> Dict[str, float]:
     """Estimate LCST as the inflection point of signal vs temperature."""
-    grouped = aggregate_signal_by_temperature(results, y_column, aggregation)
+    stable_column = f"{y_column}__pre_lcst_stable"
+    stable_results = results.copy()
+    stable_results[stable_column] = stabilize_pre_lcst_signal(results, y_column, smoothing_window)
+    grouped = aggregate_signal_by_temperature(stable_results, stable_column, aggregation)
     if len(grouped) < 5:
         return {"lcst_C": np.nan, "signal": np.nan, "slope": np.nan, "second_derivative": np.nan}
 
@@ -1544,7 +1682,7 @@ def estimate_lcst_inflection(
         return {"lcst_C": np.nan, "signal": np.nan, "slope": np.nan, "second_derivative": np.nan}
 
     x = grouped["temperature_C"].to_numpy(dtype=float)
-    y = smooth_series(grouped[y_column], smoothing_window).to_numpy(dtype=float)
+    y = smooth_series(grouped[stable_column], smoothing_window).to_numpy(dtype=float)
     if normalization_mode == "Min-max 0-1":
         y = normalize_series(pd.Series(y)).to_numpy(dtype=float)
     elif normalization_mode == "First frame = 1":
@@ -1579,7 +1717,10 @@ def estimate_lcst_half_change(
     aggregation: str = "Mean",
 ) -> Dict[str, float]:
     """Estimate LCST where the signal has crossed 50% of its observed change."""
-    grouped = aggregate_signal_by_temperature(results, y_column, aggregation)
+    stable_column = f"{y_column}__pre_lcst_stable"
+    stable_results = results.copy()
+    stable_results[stable_column] = stabilize_pre_lcst_signal(results, y_column, smoothing_window)
+    grouped = aggregate_signal_by_temperature(stable_results, stable_column, aggregation)
     if len(grouped) < 2:
         return {"lcst_C": np.nan, "signal": np.nan, "target_signal": np.nan, "slope": np.nan}
 
@@ -1588,14 +1729,23 @@ def estimate_lcst_half_change(
         return {"lcst_C": np.nan, "signal": np.nan, "target_signal": np.nan, "slope": np.nan}
 
     x = grouped["temperature_C"].to_numpy(dtype=float)
-    y = smooth_series(grouped[y_column], smoothing_window).to_numpy(dtype=float)
+    y = smooth_series(grouped[stable_column], smoothing_window).to_numpy(dtype=float)
     finite = np.isfinite(x) & np.isfinite(y)
     x = x[finite]
     y = y[finite]
     if len(x) < 2 or abs(float(np.nanmax(y) - np.nanmin(y))) < 1e-12:
         return {"lcst_C": np.nan, "signal": np.nan, "target_signal": np.nan, "slope": np.nan}
 
-    target = float(0.5 * np.nanmax(y))
+    order_column = signal_time_order_column(stable_results)
+    time_ordered_results = stable_results.sort_values(order_column) if order_column is not None else stable_results
+    time_ordered_signal = pd.to_numeric(time_ordered_results[stable_column], errors="coerce").dropna()
+    if len(time_ordered_signal) >= 2:
+        edge_count = max(1, min(len(time_ordered_signal), int(np.ceil(len(time_ordered_signal) * 0.20))))
+        initial_level = float(time_ordered_signal.iloc[:edge_count].median())
+        final_level = float(time_ordered_signal.iloc[-edge_count:].median())
+        target = float(initial_level + 0.5 * (final_level - initial_level))
+    else:
+        target = float(np.nanmin(y) + 0.5 * (np.nanmax(y) - np.nanmin(y)))
     crossing_candidates = []
     for idx in range(len(x) - 1):
         y1 = float(y[idx])
@@ -1831,8 +1981,11 @@ def make_plot(
     temperature_aggregation: str = "Mean",
 ) -> plt.Figure:
     """Create a temperature plot for the selected optical signal."""
-    plot_df = aggregate_signal_by_temperature(results, y_column, temperature_aggregation)
-    signal = smooth_series(plot_df[y_column], smoothing_window)
+    stable_column = f"{y_column}__pre_lcst_stable"
+    stable_results = results.copy()
+    stable_results[stable_column] = stabilize_pre_lcst_signal(results, y_column, smoothing_window)
+    plot_df = aggregate_signal_by_temperature(stable_results, stable_column, temperature_aggregation)
+    signal = smooth_series(plot_df[stable_column], smoothing_window)
     if normalization_mode == "Min-max 0-1":
         signal = normalize_series(signal)
         y_label = f"Normalized {y_label}"
@@ -2227,7 +2380,8 @@ def render_image_series_mode() -> None:
                 max_components=int(detection_settings["max_components"]),
             )
 
-        st.metric("Preview detected area", f"{int(preview_mask.sum()):,} px")
+        preview_effective_area = effective_pattern_area(preview_mask, detection_mode)
+        st.metric("Preview effective area", f"{preview_effective_area:,.0f} px")
         run_images = st.button("Run image area analysis", type="primary", use_container_width=True)
 
     with left_col:
@@ -2519,11 +2673,67 @@ def render_simplified_video_mode() -> None:
     st.session_state.setdefault("temperature_templates", [])
 
     st.header("Step 1: Draw ROIs and Preview Detection")
+    if "preview_frame_index" not in st.session_state:
+        st.session_state.preview_frame_index = 0
+    st.session_state.preview_frame_index = int(
+        np.clip(st.session_state.preview_frame_index, 0, max(0, info.frame_count - 1))
+    )
+    st.session_state.setdefault("preview_playing", False)
+
+    def set_preview_frame(frame_index: int, reset_canvas: bool = True) -> None:
+        st.session_state.preview_frame_index = int(np.clip(frame_index, 0, max(0, info.frame_count - 1)))
+        if reset_canvas:
+            st.session_state.simple_canvas_clear_counter = st.session_state.get("simple_canvas_clear_counter", 0) + 1
+
+    player_col1, player_col2, player_col3, player_col4, player_col5 = st.columns([0.8, 0.8, 0.8, 0.8, 1.2])
+    with player_col1:
+        if st.button("Play", use_container_width=True):
+            st.session_state.preview_playing = True
+            st.session_state.preview_play_started_at = time.monotonic()
+            st.session_state.preview_play_start_frame = int(st.session_state.preview_frame_index)
+    with player_col2:
+        if st.button("Pause", use_container_width=True):
+            st.session_state.preview_playing = False
+            st.session_state.simple_canvas_clear_counter = st.session_state.get("simple_canvas_clear_counter", 0) + 1
+            st.rerun()
+    with player_col3:
+        if st.button("-1 s", use_container_width=True):
+            set_preview_frame(st.session_state.preview_frame_index - int(round(info.fps)))
+            st.session_state.preview_playing = False
+            st.rerun()
+    with player_col4:
+        if st.button("+1 s", use_container_width=True):
+            set_preview_frame(st.session_state.preview_frame_index + int(round(info.fps)))
+            st.session_state.preview_playing = False
+            st.rerun()
+    with player_col5:
+        playback_speed = st.slider(
+            "Speed",
+            min_value=0.25,
+            max_value=2.0,
+            value=1.0,
+            step=0.25,
+            help="Preview playback speed.",
+        )
+
+    if st.session_state.preview_playing:
+        started_at = float(st.session_state.get("preview_play_started_at", time.monotonic()))
+        start_frame = int(st.session_state.get("preview_play_start_frame", st.session_state.preview_frame_index))
+        elapsed = max(0.0, time.monotonic() - started_at)
+        next_frame = start_frame + int(round(elapsed * info.fps * float(playback_speed)))
+        if next_frame <= st.session_state.preview_frame_index:
+            next_frame = st.session_state.preview_frame_index + 1
+        if next_frame >= info.frame_count - 1:
+            set_preview_frame(info.frame_count - 1, reset_canvas=True)
+            st.session_state.preview_playing = False
+        else:
+            set_preview_frame(next_frame, reset_canvas=False)
+
     preview_frame_index = st.slider(
         "Preview frame",
         min_value=0,
         max_value=max(0, info.frame_count - 1),
-        value=0,
+        value=st.session_state.preview_frame_index,
         step=1,
         key="preview_frame_index",
     )
@@ -2599,7 +2809,8 @@ def render_simplified_video_mode() -> None:
                 dilation=int(edge_dilation),
             )
             st.session_state.auto_pattern_mask = auto_pattern_mask
-            st.success(f"Detected pattern area: {int(auto_pattern_mask.sum()):,} pixels.")
+            effective_area = effective_pattern_area(auto_pattern_mask, "Auto dark-edge ROI")
+            st.success(f"Detected effective edge area: {effective_area:,.0f} px.")
             st.rerun()
 
         if st.session_state.get("simple_temp_roi_applied", False) and temp_roi is not None:
@@ -2673,13 +2884,21 @@ def render_simplified_video_mode() -> None:
             show_gray_roi=False,
         )
         st.caption("Draw directly on the preview image, then click Apply drawn ROI.")
-        simplified_canvas_roi_selector(
-            preview_frame,
-            info.width,
-            info.height,
-            display_image_rgb=overlay,
-            max_preview_width=560,
-        )
+        if st.session_state.preview_playing:
+            st.image(overlay, use_container_width=True)
+            st.info("Playing preview. Press Pause to draw or adjust ROIs on this frame.")
+        else:
+            simplified_canvas_roi_selector(
+                preview_frame,
+                info.width,
+                info.height,
+                display_image_rgb=overlay,
+                max_preview_width=560,
+            )
+
+    if st.session_state.preview_playing:
+        time.sleep(0.04)
+        st.rerun()
 
     st.header("Step 2: Analysis Settings")
     settings_col, run_col = st.columns([1.4, 0.8])
@@ -2711,7 +2930,7 @@ def render_simplified_video_mode() -> None:
         st.write("")
         st.write("")
         run_analysis = st.button("Run analysis", type="primary", use_container_width=True)
-        st.caption("Output uses area/max-area normalization, median aggregation, and light smoothing.")
+        st.caption("Output uses pre-LCST plateau stabilization, area/max-area normalization, median aggregation, and light smoothing.")
 
     if run_analysis:
         if not st.session_state.get("simple_search_roi_applied", False) or search_roi is None:
@@ -2871,7 +3090,7 @@ def render_simplified_video_mode() -> None:
             if valid_temperature_count:
                 st.caption(f"Detected temperature range: {temperature_min:g} to {temperature_max:g} °C")
             st.caption("Check whether the temperature overlay changes during the selected time range, or reduce Analyze every Nth frame.")
-        st.caption("Output uses area/max-area normalization, median aggregation, and light smoothing.")
+        st.caption("Output uses pre-LCST plateau stabilization, area/max-area normalization, median aggregation, and light smoothing.")
         with st.expander("Curve smoothing", expanded=False):
             st.session_state.simple_temperature_aggregation = st.selectbox(
                 "Repeated temperatures",
@@ -3132,12 +3351,14 @@ def legacy_main() -> None:
                     dilation=int(edge_dilation),
                 )
                 st.session_state.auto_pattern_mask = auto_pattern_mask
-                st.success(f"Detected dark-edge ROI with {int(auto_pattern_mask.sum()):,} pixels.")
+                effective_area = effective_pattern_area(auto_pattern_mask, "Auto dark-edge ROI")
+                st.success(f"Detected dark-edge ROI with {effective_area:,.0f} effective px.")
                 st.rerun()
             if auto_pattern_mask is None:
                 st.warning("No dark-edge ROI has been generated yet. Click the detection button above.")
             else:
-                st.success(f"Auto dark-edge ROI active: {int(auto_pattern_mask.sum()):,} pixels.")
+                effective_area = effective_pattern_area(auto_pattern_mask, "Auto dark-edge ROI")
+                st.success(f"Auto dark-edge ROI active: {effective_area:,.0f} effective px.")
                 if st.button("Clear auto dark-edge ROI", use_container_width=True):
                     st.session_state.pop("auto_pattern_mask", None)
                     st.rerun()
@@ -3185,12 +3406,14 @@ def legacy_main() -> None:
                     max_components=int(pattern_max_components),
                 )
                 st.session_state.auto_pattern_mask = auto_pattern_mask
-                st.success(f"Detected pattern ROI with {int(auto_pattern_mask.sum()):,} pixels.")
+                effective_area = effective_pattern_area(auto_pattern_mask, "Auto-detected pattern ROI")
+                st.success(f"Detected pattern ROI with {effective_area:,.0f} effective px.")
                 st.rerun()
             if auto_pattern_mask is None:
                 st.warning("No auto pattern ROI has been generated yet. Click the detection button above.")
             else:
-                st.success(f"Auto pattern ROI active: {int(auto_pattern_mask.sum()):,} pixels.")
+                effective_area = effective_pattern_area(auto_pattern_mask, "Auto-detected pattern ROI")
+                st.success(f"Auto pattern ROI active: {effective_area:,.0f} effective px.")
                 if st.button("Clear auto pattern ROI", use_container_width=True):
                     st.session_state.pop("auto_pattern_mask", None)
                     st.rerun()
@@ -3538,7 +3761,7 @@ def legacy_main() -> None:
         st.warning("Many frames have low recognition confidence. Inspect the temperature debug panel and ROI placement.")
     st.info(
         "`gray_value` uses the image convention 0=black and 255=white. "
-        "`pattern_area_px` is the detected pattern area in pixels. "
+        "`pattern_area_px` is a noise-resistant effective area; Auto dark-edge ROI uses contour length. "
         "In auto-detection modes, the mask is recalculated for every analyzed frame."
     )
 
@@ -3631,7 +3854,7 @@ def legacy_main() -> None:
             "LCST method",
             ["50% pattern disappearance", "Inflection point"],
             index=0 if y_metric == "Pattern area" else 1,
-            help="50% method uses the temperature where the selected signal reaches the midpoint between its observed maximum and minimum.",
+            help="50% method uses the temperature where the stabilized signal reaches the midpoint between the initial plateau and final state.",
         )
 
         lcst = estimate_lcst(
@@ -3646,7 +3869,7 @@ def legacy_main() -> None:
             st.metric("Estimated LCST", f"{lcst['lcst_C']:.2f} °C")
             if lcst_method == "50% pattern disappearance":
                 st.caption(
-                    "50% method: LCST is where the signal reaches the midpoint between the observed maximum and minimum values."
+                    "50% method: LCST is where the stabilized signal reaches the midpoint between the initial plateau and final state."
                 )
             else:
                 st.caption("Inflection method: LCST is estimated from the inflection point of the smoothed signal-temperature curve.")
@@ -3683,6 +3906,10 @@ def legacy_main() -> None:
 
 
 def main() -> None:
+    st.set_page_config(
+        page_title="Gray Value Reader Helper",
+        layout="wide",
+    )
     render_simplified_video_mode()
 
 
