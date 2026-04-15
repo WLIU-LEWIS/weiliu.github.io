@@ -1,3 +1,5 @@
+import base64
+import io
 import os
 import re
 import shutil
@@ -25,20 +27,27 @@ except ImportError:
 def patch_drawable_canvas_streamlit_image_api() -> bool:
     """Patch streamlit-drawable-canvas for newer Streamlit image internals."""
     try:
+        import streamlit_drawable_canvas as drawable_canvas
         import streamlit.elements.image as st_image
         from streamlit.elements.lib.image_utils import image_to_url as current_image_to_url
         from streamlit.elements.lib.layout_utils import LayoutConfig
     except Exception:
         return False
 
-    if hasattr(st_image, "image_to_url"):
-        return True
+    def pil_image_to_data_url(image: Image.Image, output_format: str) -> str:
+        image_buffer = io.BytesIO()
+        image.save(image_buffer, format=output_format)
+        encoded = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+        return f"data:image/{output_format.lower()};base64,{encoded}"
 
     def legacy_image_to_url(image, width, clamp, channels, output_format, image_id):
+        if str(image_id).startswith("drawable-canvas-bg-") and isinstance(image, Image.Image):
+            return pil_image_to_data_url(image, "PNG")
         layout_config = LayoutConfig(width=width)
         return current_image_to_url(image, layout_config, clamp, channels, output_format, image_id)
 
     st_image.image_to_url = legacy_image_to_url
+    drawable_canvas.st_image.image_to_url = legacy_image_to_url
     return True
 
 
