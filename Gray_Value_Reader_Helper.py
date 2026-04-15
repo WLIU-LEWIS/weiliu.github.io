@@ -1,5 +1,3 @@
-import base64
-import io
 import os
 import re
 import shutil
@@ -15,6 +13,13 @@ import pandas as pd
 import pytesseract
 import streamlit as st
 from PIL import Image, ImageEnhance
+
+try:
+    import plotly.graph_objects as go
+
+    HAS_PLOTLY = True
+except ImportError:
+    HAS_PLOTLY = False
 
 try:
     from streamlit_drawable_canvas import st_canvas
@@ -34,15 +39,7 @@ def patch_drawable_canvas_streamlit_image_api() -> bool:
     except Exception:
         return False
 
-    def pil_image_to_data_url(image: Image.Image, output_format: str) -> str:
-        image_buffer = io.BytesIO()
-        image.save(image_buffer, format=output_format)
-        encoded = base64.b64encode(image_buffer.getvalue()).decode("ascii")
-        return f"data:image/{output_format.lower()};base64,{encoded}"
-
     def legacy_image_to_url(image, width, clamp, channels, output_format, image_id):
-        if str(image_id).startswith("drawable-canvas-bg-") and isinstance(image, Image.Image):
-            return pil_image_to_data_url(image, "PNG")
         layout_config = LayoutConfig(width=width)
         return current_image_to_url(image, layout_config, clamp, channels, output_format, image_id)
 
@@ -560,6 +557,154 @@ def simplified_canvas_roi_selector(
             return
         apply_latest_rectangle(rectangles, rerun_after_apply=False)
         st.success("Applied the latest ROI. The drawing canvas will clear on refresh.")
+        st.rerun()
+
+
+def plotly_box_to_roi(selection: Any, scale: float, image_w: int, image_h: int) -> Optional[Tuple[int, int, int, int]]:
+    """Convert a Plotly box-selection event into original-frame ROI coordinates."""
+    if not selection:
+        return None
+    if hasattr(selection, "to_dict"):
+        selection = selection.to_dict()
+
+    box_data = None
+    if isinstance(selection, dict):
+        selection = selection.get("selection", selection)
+        box_data = selection.get("box") or selection.get("range") if isinstance(selection, dict) else None
+    if isinstance(box_data, list):
+        box_data = box_data[-1] if box_data else None
+    if not isinstance(box_data, dict):
+        return None
+
+    if "x" in box_data and "y" in box_data:
+        x_values = box_data["x"]
+        y_values = box_data["y"]
+    elif "x0" in box_data and "x1" in box_data and "y0" in box_data and "y1" in box_data:
+        x_values = [box_data["x0"], box_data["x1"]]
+        y_values = [box_data["y0"], box_data["y1"]]
+    else:
+        return None
+
+    if not isinstance(x_values, (list, tuple)) or not isinstance(y_values, (list, tuple)):
+        return None
+    if len(x_values) < 2 or len(y_values) < 2:
+        return None
+
+    try:
+        x1, x2 = float(x_values[0]), float(x_values[1])
+        y1, y2 = float(y_values[0]), float(y_values[1])
+    except (TypeError, ValueError):
+        return None
+
+    left = min(x1, x2)
+    top = min(y1, y2)
+    width = abs(x2 - x1)
+    height = abs(y2 - y1)
+    if width < 2 or height < 2:
+        return None
+
+    return clamp_roi(
+        int(round(left / scale)),
+        int(round(top / scale)),
+        int(round(width / scale)),
+        int(round(height / scale)),
+        image_w,
+        image_h,
+    )
+
+
+def plotly_roi_selector(
+    frame_bgr: np.ndarray,
+    image_w: int,
+    image_h: int,
+    display_image_rgb: Optional[np.ndarray] = None,
+    max_preview_width: int = 560,
+) -> None:
+    """Select simplified workflow ROIs with a native Plotly box-selection preview."""
+    if not HAS_PLOTLY:
+        st.warning("Plotly is not installed, so the clickable preview selector is unavailable.")
+        simplified_canvas_roi_selector(frame_bgr, image_w, image_h, display_image_rgb, max_preview_width)
+        return
+
+    target = st.radio(
+        "Draw ROI on preview",
+        ["Pattern search ROI", "Temperature OCR ROI"],
+        horizontal=True,
+        key="simple_plotly_target_roi",
+    )
+    if target == "Temperature OCR ROI":
+        st.info("Box the full temperature label, including `Temp`, the number, and `°C`; avoid nearby unrelated text.")
+
+    canvas_w, canvas_h, scale = get_canvas_size(image_w, image_h, max_width=max_preview_width)
+    frame_rgb = display_image_rgb.copy() if display_image_rgb is not None else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    if frame_rgb.dtype != np.uint8:
+        frame_rgb = np.clip(frame_rgb, 0, 255).astype(np.uint8)
+    preview_rgb = np.asarray(
+        Image.fromarray(np.ascontiguousarray(frame_rgb), mode="RGB").resize(
+            (canvas_w, canvas_h),
+            resample=Image.Resampling.LANCZOS,
+        )
+    )
+
+    grid_step = max(8, min(canvas_w, canvas_h) // 42)
+    xs, ys = np.meshgrid(np.arange(0, canvas_w, grid_step), np.arange(0, canvas_h, grid_step))
+    fig = go.Figure()
+    fig.add_trace(go.Image(z=preview_rgb, hoverinfo="skip"))
+    fig.add_trace(
+        go.Scatter(
+            x=xs.ravel(),
+            y=ys.ravel(),
+            mode="markers",
+            marker={"size": 4, "opacity": 0},
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    fig.update_layout(
+        dragmode="select",
+        margin={"l": 0, "r": 0, "t": 0, "b": 0},
+        width=canvas_w,
+        height=canvas_h,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        selectdirection="any",
+    )
+    fig.update_xaxes(visible=False, range=[0, canvas_w], fixedrange=False, constrain="domain")
+    fig.update_yaxes(visible=False, range=[canvas_h, 0], fixedrange=False, scaleanchor="x", scaleratio=1)
+    config = {
+        "displayModeBar": True,
+        "modeBarButtonsToRemove": ["zoom2d", "pan2d", "lasso2d", "zoomIn2d", "zoomOut2d", "autoScale2d"],
+        "displaylogo": False,
+    }
+    selection = st.plotly_chart(
+        fig,
+        use_container_width=False,
+        key=f"simple_plotly_roi_{target}_{st.session_state.get('preview_frame_index', 0)}",
+        on_select="rerun",
+        selection_mode=("box",),
+        config=config,
+    )
+
+    st.caption("Drag a rectangle on the image. If the toolbar is active, choose the box-select icon.")
+    selected_roi = plotly_box_to_roi(selection, scale, image_w, image_h)
+    if selected_roi is not None:
+        st.session_state.simple_plotly_selected_roi = selected_roi
+        st.success(f"Selected ROI: x={selected_roi[0]}, y={selected_roi[1]}, w={selected_roi[2]}, h={selected_roi[3]}")
+    else:
+        st.session_state.pop("simple_plotly_selected_roi", None)
+
+    if st.button("Apply selected ROI", use_container_width=True, key="simple_apply_plotly_roi"):
+        roi = st.session_state.get("simple_plotly_selected_roi")
+        if roi is None:
+            st.warning("Drag a rectangle on the preview image first.")
+            return
+        if target == "Pattern search ROI":
+            st.session_state.pending_simple_search_roi = roi
+        else:
+            st.session_state.pending_simple_temp_roi = roi
+            st.session_state.pop("simple_temperature_parse_mode", None)
+            st.session_state.pop("simple_preview_temperature", None)
+        st.session_state.pop("simple_plotly_selected_roi", None)
         st.rerun()
 
 
@@ -2892,12 +3037,12 @@ def render_simplified_video_mode() -> None:
             show_temp_roi=visible_temp_roi,
             show_gray_roi=False,
         )
-        st.caption("Draw directly on the preview image, then click Apply drawn ROI.")
+        st.caption("Drag a box directly on the preview image, then click Apply selected ROI.")
         if st.session_state.preview_playing:
             st.image(overlay, use_container_width=True)
             st.info("Playing preview. Press Pause to draw or adjust ROIs on this frame.")
         else:
-            simplified_canvas_roi_selector(
+            plotly_roi_selector(
                 preview_frame,
                 info.width,
                 info.height,
