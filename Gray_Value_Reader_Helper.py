@@ -708,6 +708,123 @@ def plotly_roi_selector(
         st.rerun()
 
 
+def simplified_native_roi_selector(
+    frame_bgr: np.ndarray,
+    image_w: int,
+    image_h: int,
+    display_image_rgb: Optional[np.ndarray] = None,
+) -> None:
+    """Select ROIs with native Streamlit controls while always showing the preview frame."""
+    target = st.radio(
+        "ROI type",
+        ["Pattern search ROI", "Temperature OCR ROI"],
+        horizontal=True,
+        key="simple_native_target_roi",
+    )
+    if target == "Temperature OCR ROI":
+        st.info("Box the full temperature label, including `Temp`, the number, and `°C`; avoid nearby unrelated text.")
+
+    is_pattern_roi = target == "Pattern search ROI"
+    key_prefix = "simple_native_search_roi" if is_pattern_roi else "simple_native_temp_roi"
+    default_roi = (
+        max(0, int(image_w * 0.10)),
+        max(0, int(image_h * 0.08)),
+        max(20, int(image_w * 0.72)),
+        max(20, int(image_h * 0.70)),
+    ) if is_pattern_roi else (
+        max(0, int(image_w * 0.65)),
+        max(0, int(image_h * 0.05)),
+        max(20, int(image_w * 0.25)),
+        max(12, int(image_h * 0.12)),
+    )
+    saved_roi = st.session_state.get("simple_search_roi" if is_pattern_roi else "simple_temp_roi", default_roi)
+    saved_roi = clamp_roi(*saved_roi, image_w, image_h)
+
+    if st.session_state.get(f"{key_prefix}_source_roi") != saved_roi:
+        st.session_state[f"{key_prefix}_source_roi"] = saved_roi
+        st.session_state[f"{key_prefix}_x"] = int(saved_roi[0])
+        st.session_state[f"{key_prefix}_y"] = int(saved_roi[1])
+        st.session_state[f"{key_prefix}_w"] = int(saved_roi[2])
+        st.session_state[f"{key_prefix}_h"] = int(saved_roi[3])
+
+    ctrl_col1, ctrl_col2, ctrl_col3, ctrl_col4 = st.columns(4)
+    with ctrl_col1:
+        roi_x = st.number_input(
+            "X",
+            min_value=0,
+            max_value=max(0, image_w - 1),
+            step=1,
+            key=f"{key_prefix}_x",
+        )
+    with ctrl_col2:
+        roi_y = st.number_input(
+            "Y",
+            min_value=0,
+            max_value=max(0, image_h - 1),
+            step=1,
+            key=f"{key_prefix}_y",
+        )
+
+    max_roi_w = max(1, image_w - int(roi_x))
+    max_roi_h = max(1, image_h - int(roi_y))
+    st.session_state[f"{key_prefix}_w"] = int(np.clip(st.session_state[f"{key_prefix}_w"], 1, max_roi_w))
+    st.session_state[f"{key_prefix}_h"] = int(np.clip(st.session_state[f"{key_prefix}_h"], 1, max_roi_h))
+
+    with ctrl_col3:
+        roi_w = st.number_input(
+            "Width",
+            min_value=1,
+            max_value=max_roi_w,
+            step=1,
+            key=f"{key_prefix}_w",
+        )
+    with ctrl_col4:
+        roi_h = st.number_input(
+            "Height",
+            min_value=1,
+            max_value=max_roi_h,
+            step=1,
+            key=f"{key_prefix}_h",
+        )
+
+    selected_roi = clamp_roi(int(roi_x), int(roi_y), int(roi_w), int(roi_h), image_w, image_h)
+    preview_rgb = (
+        display_image_rgb.copy()
+        if display_image_rgb is not None
+        else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+    )
+    if preview_rgb.dtype != np.uint8:
+        preview_rgb = np.clip(preview_rgb, 0, 255).astype(np.uint8)
+    preview_rgb = np.ascontiguousarray(preview_rgb)
+
+    x, y, w, h = selected_roi
+    color = (255, 210, 0) if is_pattern_roi else (0, 130, 255)
+    label = "Pattern search ROI" if is_pattern_roi else "Temperature OCR ROI"
+    cv2.rectangle(preview_rgb, (x, y), (x + w, y + h), color, 3)
+    cv2.putText(
+        preview_rgb,
+        label,
+        (x, max(18, y - 8)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        color,
+        2,
+        cv2.LINE_AA,
+    )
+
+    st.image(preview_rgb, caption=f"Preview frame {st.session_state.get('preview_frame_index', 0)}", use_container_width=True)
+    st.caption(f"Current selection: x={x}, y={y}, w={w}, h={h}")
+
+    if st.button("Apply selected ROI", use_container_width=True, key="simple_apply_native_roi"):
+        if is_pattern_roi:
+            st.session_state.pending_simple_search_roi = selected_roi
+        else:
+            st.session_state.pending_simple_temp_roi = selected_roi
+            st.session_state.pop("simple_temperature_parse_mode", None)
+            st.session_state.pop("simple_preview_temperature", None)
+        st.rerun()
+
+
 def draw_rois(
     frame_bgr: np.ndarray,
     gray_roi: Tuple[int, int, int, int],
@@ -3037,17 +3154,16 @@ def render_simplified_video_mode() -> None:
             show_temp_roi=visible_temp_roi,
             show_gray_roi=False,
         )
-        st.caption("Drag a box directly on the preview image, then click Apply selected ROI.")
+        st.caption("Choose a preview frame above, adjust the ROI box below, then click Apply selected ROI.")
         if st.session_state.preview_playing:
             st.image(overlay, use_container_width=True)
             st.info("Playing preview. Press Pause to draw or adjust ROIs on this frame.")
         else:
-            plotly_roi_selector(
+            simplified_native_roi_selector(
                 preview_frame,
                 info.width,
                 info.height,
                 display_image_rgb=overlay,
-                max_preview_width=560,
             )
 
     if st.session_state.preview_playing:
