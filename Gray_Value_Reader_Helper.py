@@ -471,93 +471,8 @@ def simplified_canvas_roi_selector(
     display_image_rgb: Optional[np.ndarray] = None,
     max_preview_width: int = 560,
 ) -> None:
-    """Drag-select only the two ROIs used by the simplified workflow."""
-    if not HAS_DRAWABLE_CANVAS:
-        st.info("Install `streamlit-drawable-canvas` to draw ROI directly on the preview image.")
-        return
-    if not CAN_USE_DRAWABLE_CANVAS:
-        st.warning("Drag selection is not compatible with this Streamlit version. Use the numeric ROI controls.")
-        return
-
-    target = st.radio(
-        "Draw ROI on preview",
-        ["Pattern search ROI", "Temperature OCR ROI"],
-        horizontal=True,
-        key="simple_canvas_target_roi",
-    )
-    if target == "Temperature OCR ROI":
-        st.info("Box the full temperature label, including `Temp`, the number, and `°C`; avoid nearby unrelated text.")
-    if st.session_state.get("simple_canvas_last_target") != target:
-        st.session_state.simple_canvas_last_target = target
-        st.session_state.simple_canvas_clear_counter = st.session_state.get("simple_canvas_clear_counter", 0) + 1
-        st.rerun()
-
-    canvas_w, canvas_h, scale = get_canvas_size(image_w, image_h, max_width=max_preview_width)
-    frame_rgb = display_image_rgb.copy() if display_image_rgb is not None else cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-    if frame_rgb.dtype != np.uint8:
-        frame_rgb = np.clip(frame_rgb, 0, 255).astype(np.uint8)
-    canvas_image = Image.fromarray(np.ascontiguousarray(frame_rgb), mode="RGB").resize(
-        (canvas_w, canvas_h),
-        resample=Image.Resampling.LANCZOS,
-    )
-    stroke_color = "#ffd000" if target == "Pattern search ROI" else "#ff5000"
-    canvas_refresh_col, canvas_help_col = st.columns([0.34, 0.66])
-    with canvas_refresh_col:
-        if st.button("Refresh preview canvas", use_container_width=True, key="simple_refresh_canvas"):
-            st.session_state.simple_canvas_clear_counter = st.session_state.get("simple_canvas_clear_counter", 0) + 1
-            st.rerun()
-    with canvas_help_col:
-        st.caption("Use refresh if the drawing area appears blank.")
-    canvas_key = (
-        f"simple_roi_canvas_{target}_"
-        f"{st.session_state.get('preview_frame_index', 0)}_"
-        f"{st.session_state.get('simple_canvas_clear_counter', 0)}"
-    )
-    try:
-        canvas_result = st_canvas(
-            fill_color="rgba(0, 0, 0, 0)",
-            stroke_width=2,
-            stroke_color=stroke_color,
-            background_image=canvas_image,
-            initial_drawing={"version": "4.4.0", "objects": []},
-            update_streamlit=True,
-            height=canvas_h,
-            width=canvas_w,
-            drawing_mode="rect",
-            key=canvas_key,
-        )
-    except Exception as exc:
-        st.warning(f"Drag selection could not start: {exc}")
-        return
-
-    def apply_latest_rectangle(rectangles: List[dict], rerun_after_apply: bool) -> None:
-        roi = canvas_object_to_roi(rectangles[-1], scale, image_w, image_h, force_square=False)
-        if roi is None:
-            st.warning("The drawn ROI was too small.")
-            return
-        if target == "Pattern search ROI":
-            st.session_state.pending_simple_search_roi = roi
-        else:
-            st.session_state.pending_simple_temp_roi = roi
-            st.session_state.pop("simple_temperature_parse_mode", None)
-            st.session_state.pop("simple_preview_temperature", None)
-        st.session_state.simple_canvas_clear_counter = st.session_state.get("simple_canvas_clear_counter", 0) + 1
-        if rerun_after_apply:
-            st.rerun()
-
-    objects = canvas_result.json_data.get("objects", []) if canvas_result.json_data else []
-    rectangles = [obj for obj in objects if obj.get("type") == "rect"]
-    if len(rectangles) > 1:
-        apply_latest_rectangle(rectangles, rerun_after_apply=True)
-        return
-
-    if st.button("Apply drawn ROI", use_container_width=True, key="simple_apply_drawn_roi"):
-        if not rectangles:
-            st.warning("No rectangle was drawn. Drag on the image first.")
-            return
-        apply_latest_rectangle(rectangles, rerun_after_apply=False)
-        st.success("Applied the latest ROI. The drawing canvas will clear on refresh.")
-        st.rerun()
+    """Compatibility wrapper for older calls; use the native preview selector."""
+    simplified_native_roi_selector(frame_bgr, image_w, image_h, display_image_rgb)
 
 
 def plotly_box_to_roi(selection: Any, scale: float, image_w: int, image_h: int) -> Optional[Tuple[int, int, int, int]]:
@@ -623,7 +538,7 @@ def plotly_roi_selector(
     """Select simplified workflow ROIs with a native Plotly box-selection preview."""
     if not HAS_PLOTLY:
         st.warning("Plotly is not installed, so the clickable preview selector is unavailable.")
-        simplified_canvas_roi_selector(frame_bgr, image_w, image_h, display_image_rgb, max_preview_width)
+        simplified_native_roi_selector(frame_bgr, image_w, image_h, display_image_rgb)
         return
 
     target = st.radio(
